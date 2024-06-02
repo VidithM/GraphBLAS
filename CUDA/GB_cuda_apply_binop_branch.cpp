@@ -8,6 +8,11 @@ bool GB_cuda_apply_binop_branch
     const GrB_Matrix A
 )
 {
+    if (op == NULL)
+    {
+        return false ;
+    }
+    
     bool ok = GB_cuda_type_branch (ctype) && GB_cuda_type_branch (A->type) ;
 
     if (op->xtype != NULL)
@@ -23,7 +28,7 @@ bool GB_cuda_apply_binop_branch
         ok = ok && GB_cuda_type_branch (op->ztype) ;
     }
 
-    ok = ok && (op != NULL && op->hash != UINT64_MAX) ; 
+    ok = ok && (op->hash != UINT64_MAX) ; 
 
     return (ok) ;
 }

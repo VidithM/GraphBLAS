@@ -1,11 +1,10 @@
 #include "GraphBLAS_cuda.hpp"
 #include "GB_cuda.hpp"
 
-bool GB_cuda_apply_unop_branch
+bool GB_cuda_select_bitmap_branch
 (
-    const GrB_Type ctype,
     const GrB_Matrix A,
-    const GB_Operator op
+    const GrB_IndexUnaryOp op
 )
 {
     if (op == NULL)
@@ -13,7 +12,7 @@ bool GB_cuda_apply_unop_branch
         return false ;
     }
     
-    bool ok = (GB_cuda_type_branch (ctype) && GB_cuda_type_branch (A->type)) ;
+    bool ok = (GB_cuda_type_branch (A->type)) ;
 
     if (op->xtype != NULL)
     {
@@ -27,8 +26,9 @@ bool GB_cuda_apply_unop_branch
     {
         ok = ok && (GB_cuda_type_branch (op->ztype)) ;
     }
-    
+
     ok = ok && (op->hash != UINT64_MAX) ;
 
     return ok ;
 }
+
