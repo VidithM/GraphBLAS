@@ -631,7 +631,7 @@ GrB_Info GB_jit_kernel_apply_unop                                           \
 GrB_Info GB_jit_kernel_select_bitmap                                        \
 (                                                                           \
     int8_t *Cb,                                                             \
-    int64_t *cnvals,                                                        \
+    uint64_t *cnvals,                                                       \
     GrB_Matrix A,                                                           \
     const GB_void *ythunk,                                                  \
     cudaStream_t stream,                                                    \

@@ -28,10 +28,12 @@ GrB_Info GB_cuda_apply_binop
     size_t scalarx_cuda_size = 0 ;
     if (bind1st)
     {
+        ASSERT (op->xtype != NULL) ;
         scalarx_cuda = GB_MALLOC_WORK (op->xtype->size, GB_void, &scalarx_cuda_size) ;
     }
     else
     {
+        ASSERT (op->ytype != NULL) ;
         scalarx_cuda = GB_MALLOC_WORK (op->ytype->size, GB_void, &scalarx_cuda_size) ;
     }
     if (scalarx_cuda == NULL)

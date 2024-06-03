@@ -15,7 +15,7 @@ GrB_Info GB_cuda_select_bitmap_jit
 (
     // output:
     int8_t *Cb,
-    int64_t *cnvals,
+    uint64_t *cnvals,
     // input:
     const bool C_iso,
     const GrB_Matrix A,

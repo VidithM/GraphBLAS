@@ -80,7 +80,7 @@ __inline__ __device__ uint64_t GB_block_Reduce
 __global__ void GB_cuda_select_bitmap_kernel
 (
     int8_t *Cb_out,
-    int64_t *cnvals_out,
+    uint64_t *cnvals_out,
     GrB_Matrix A,
     const GB_void *thunk
 )
@@ -106,8 +106,8 @@ __global__ void GB_cuda_select_bitmap_kernel
         // printf ("passed p = %d\n", p) ;
         if (!GBB_A (Ab, p)) { continue; }
 
-        uint64_t i = (p % nrows) ;
-        uint64_t j = (p / nrows) ;
+        int64_t i = (p % nrows) ;
+        int64_t j = (p / nrows) ;
 
         GB_Y_TYPE y ;
         
@@ -129,7 +129,7 @@ __global__ void GB_cuda_select_bitmap_kernel
     // compute cnvals for this block
     // IMPORTANT: every thread in the threadblock must participate in the warp reduction
     // for thread 0 to obtain the right result
-    int64_t block_keep = (int64_t) GB_block_Reduce (this_thread_block(), my_keep) ;
+    uint64_t block_keep = GB_block_Reduce (this_thread_block(), my_keep) ;
 
     // this can also be a warp-level synchronization?
     // (we only care about the result in warp 0, since that is where thread 0 is)

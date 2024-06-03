@@ -61,16 +61,12 @@ GrB_Info GB_cuda_select_bitmap
     }
     (*cnvals_cuda) = 0 ;
 
-    // printf ("problem size: %lu\n", anz) ;
-    GrB_Info info = GB_cuda_select_bitmap_jit (Cb, cnvals_cuda, C_iso, A, flipij, ythunk_cuda, 
-        op, stream, gridsz, BLOCK_SIZE) ;
-
-    // printf ("did pass here (0)\n") ;
+    GrB_Info info = GB_cuda_select_bitmap_jit (Cb, (uint64_t *) cnvals_cuda, C_iso, A, 
+        flipij, ythunk_cuda, op, stream, gridsz, BLOCK_SIZE) ;
     
     if (info == GrB_NO_VALUE) info = GrB_PANIC ;
     GB_OK (info) ;
 
-    // printf ("did pass here (1)\n") ;
 
     CUDA_OK (cudaStreamSynchronize (stream)) ;
     CUDA_OK (cudaStreamDestroy (stream)) ;
