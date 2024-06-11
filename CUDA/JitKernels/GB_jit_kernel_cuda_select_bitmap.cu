@@ -36,15 +36,6 @@ __device__ __inline__ uint64_t GB_cuda_warp_sum_uint64
     }
     #endif
 
-    //--------------------------------------------------------------------------
-    // return result
-    //--------------------------------------------------------------------------
-
-    // Note that only thread 0 will have the full summation of all values in
-    // the tile.  To broadcast it to all threads, use the following:
-
-    // value = tile.shfl (value, 0) ;
-
     return (value) ;
 }
 
@@ -69,6 +60,7 @@ __inline__ __device__ uint64_t GB_block_Reduce
     }
     this_thread_block().sync() ;        // Wait for all partial reductions
 
+    // for this to work, we need blockDim.x <= 32 * 32 ?
     val = (threadIdx.x < (blockDim.x >> LOG2_WARPSIZE)) ?  shared [lane] : 0 ;
 
     // Final reduce within first warp
@@ -99,24 +91,24 @@ __global__ void GB_cuda_select_bitmap_kernel
     uint64_t my_keep = 0 ;
     int tid = blockIdx.x * blockDim.x + threadIdx.x ;
     int nthreads = blockDim.x * gridDim.x ;
-
-    for (int p = tid ; p < anz; p += nthreads)
+    for (int64_t p = tid ; p < anz ; p += nthreads)
     {
         Cb_out [p] = 0 ;
-        // printf ("passed p = %d\n", p) ;
         if (!GBB_A (Ab, p)) { continue; }
 
+        #if ( GB_DEPENDS_ON_I )
         int64_t i = (p % nrows) ;
-        int64_t j = (p / nrows) ;
+        #endif
 
-        GB_Y_TYPE y ;
+        #if ( GB_DEPENDS_ON_J )
+        int64_t j = (p / nrows) ;
+        #endif
         
         #if ( GB_DEPENDS_ON_Y )
-        y = * ((GB_Y_TYPE *) thunk) ;
+        GB_Y_TYPE y = * ((GB_Y_TYPE *) thunk) ;
         #endif
 
         GB_TEST_VALUE_OF_ENTRY (keep, p) ;
-        
         if (keep) 
         {
             my_keep++ ;
@@ -130,7 +122,6 @@ __global__ void GB_cuda_select_bitmap_kernel
     // IMPORTANT: every thread in the threadblock must participate in the warp reduction
     // for thread 0 to obtain the right result
     uint64_t block_keep = GB_block_Reduce (this_thread_block(), my_keep) ;
-
     // this can also be a warp-level synchronization?
     // (we only care about the result in warp 0, since that is where thread 0 is)
     this_thread_block().sync() ;

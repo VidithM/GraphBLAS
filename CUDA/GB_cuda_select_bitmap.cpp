@@ -15,7 +15,7 @@
 
 GrB_Info GB_cuda_select_bitmap
 (
-    int8_t *Cb, // allocated with GB_new_bix, so always malloc'd
+    int8_t *Cb,
     int64_t *cnvals,
     const bool C_iso,
     const GrB_Matrix A,
@@ -40,7 +40,6 @@ GrB_Info GB_cuda_select_bitmap
         }
         memcpy (ythunk_cuda, ythunk, op->ytype->size) ;
     }
-    
     // FIXME: use the stream pool
     cudaStream_t stream ;
     CUDA_OK (cudaStreamCreate (&stream)) ;
@@ -54,20 +53,20 @@ GrB_Info GB_cuda_select_bitmap
     // create a separate cnvals_result for CUDA since cnvals may be on the CPU stack
     int64_t *cnvals_cuda ;
     size_t cnvals_cuda_size ;
-    cnvals_cuda = GB_MALLOC_WORK (sizeof(int64_t), int64_t, &cnvals_cuda_size) ;
+    cnvals_cuda = GB_MALLOC_WORK (1, int64_t, &cnvals_cuda_size) ;
     if (cnvals_cuda == NULL)
     {
         return (GrB_OUT_OF_MEMORY) ;
     }
     (*cnvals_cuda) = 0 ;
-
-    GrB_Info info = GB_cuda_select_bitmap_jit (Cb, (uint64_t *) cnvals_cuda, C_iso, A, 
+        
+    GrB_Info info = GrB_NO_VALUE ;
+    info = GB_cuda_select_bitmap_jit (Cb, (uint64_t *) cnvals_cuda, C_iso, A, 
         flipij, ythunk_cuda, op, stream, gridsz, BLOCK_SIZE) ;
     
     if (info == GrB_NO_VALUE) info = GrB_PANIC ;
     GB_OK (info) ;
-
-
+    
     CUDA_OK (cudaStreamSynchronize (stream)) ;
     CUDA_OK (cudaStreamDestroy (stream)) ;
 

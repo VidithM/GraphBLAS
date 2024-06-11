@@ -12,6 +12,11 @@ bool GB_cuda_apply_unop_branch
     {
         return false ;
     }
+
+    if (A->static_header)
+    {
+        return false ;
+    }
     
     bool ok = (GB_cuda_type_branch (ctype) && GB_cuda_type_branch (A->type)) ;
 
