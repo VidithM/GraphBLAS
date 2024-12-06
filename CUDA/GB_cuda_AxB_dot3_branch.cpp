@@ -38,7 +38,7 @@ bool GB_cuda_AxB_dot3_branch
         // C has no entries: no need to compute it on the GPU
         return (false) ;
     }
-
+    return false ;
     // very rough estimate of the work to do
     double adeg = ((double) GB_nnz (A)) / ((double) GB_IMAX (1, A->nvec)) ;
     double bdeg = ((double) GB_nnz (B)) / ((double) GB_IMAX (1, B->nvec)) ;
@@ -46,6 +46,7 @@ bool GB_cuda_AxB_dot3_branch
 
     int ngpus_to_use = GB_ngpus_to_use (work) ;
     GBURBLE (" work:%g GPUs:%d ", work, ngpus_to_use) ;
+    return false ;
     if (ngpus_to_use > 0)
     {
         // FIXME: or do this in GB_AxB_dot3_cuda

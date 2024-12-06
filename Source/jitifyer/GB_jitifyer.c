@@ -2602,9 +2602,11 @@ void GB_jitifyer_nvcc_compile (char *kernel_name, uint32_t bucket)
     "-I/usr/local/cuda/include -std=c++17 " 
     // Fixme for CUDA: use GB_CUDA_ARCHITECTURES here:
     " -arch=sm_60 "
+    // Add OpenMP support for timing in host-side template code
+    " -Xcompiler -fopenmp "
     " -fPIC " 
     // Fixme for CUDA: add GB_CUDA_FLAGS here:
-    " -O3 "   // HACK Fixme for CUDA
+    " -G "   // HACK Fixme for CUDA
     "-I'%s/src' "                       // include source directory
     "-I'%s/src/template' "
     "-I'%s/src/include' "

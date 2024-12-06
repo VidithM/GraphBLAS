@@ -18,6 +18,9 @@
 
 #define GB_FREE_ALL GB_phybix_free (C) ;
 
+static int cuda_hits = 0 ;
+static int tot_hits = 0 ;
+
 GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
 (
     GrB_Matrix C,                   // output matrix, static header
@@ -199,162 +202,225 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
         }
 
         info = GrB_NO_VALUE ;
+        tot_hits++ ;
+        bool compare = false ;
+        FILE *timing_dump = NULL ;
 
         #if defined ( GRAPHBLAS_HAS_CUDA )
         if (GB_cuda_rowscale_branch (D, B, semiring, flipxy))
         {
-            info = GB_cuda_rowscale (C, D, B, semiring, flipxy) ;
+#ifdef TIMING
+            cuda_hits++ ;
+            char results_path [PATH_MAX] ;
+            snprintf (results_path, PATH_MAX, "%sGB_cuda_rowscale_timing.txt", RESULTS_DIR) ;
+            if (cuda_hits == 1) {
+                // Remove the old file if it exists on the first run
+                char rm_cmd [4096] ;
+                snprintf (rm_cmd, 4096, "rm -f %s", results_path) ;
+                system (rm_cmd) ;
+            }
+            timing_dump = fopen (results_path, "a") ;
+            fprintf (timing_dump, "======== [Kernel: rowscale] [GPU] [Start run: %d] [tot_hits: %d (ratio: %0.3f)] [work: %ld] ========\n",
+                cuda_hits, tot_hits, ((double) cuda_hits) / tot_hits, B->nvals) ;
+            fflush (timing_dump) ;
+            int ntrials = 5 ;
+            for (int t = 0 ; t < ntrials ; t++)
+#endif 
+            {
+            #ifdef TIMING
+                double t_start = omp_get_wtime () ;
+            #endif
+                info = GB_cuda_rowscale (C, D, B, semiring, flipxy) ;
+            #ifdef TIMING
+                double t_end = omp_get_wtime () ;
+                fprintf (timing_dump, "[Kernel: rowscale] [GPU] trial %d: wall clock: %0.8f s\n",
+                    t, t_end - t_start) ;
+                fflush (timing_dump) ;
+            #endif
+            }
+#ifdef TIMING
+            compare = (info == GrB_SUCCESS) ;
+            fprintf (timing_dump, "======== [Kernel: rowscale] [GPU] [End run: %d] [success: %d] ========\n\n", cuda_hits, compare) ;
+            fflush (timing_dump) ;
+            if (!compare) {
+                fclose (timing_dump) ;
+            }
+#endif
         }
         #endif
-
-        //----------------------------------------------------------------------
-        // determine the number of threads to use
-        //----------------------------------------------------------------------
-
-        int nthreads_max = GB_Context_nthreads_max ( ) ;
-        double chunk = GB_Context_chunk ( ) ;
-        int nthreads = GB_nthreads (GB_nnz_held (B) + B->nvec, chunk,
-            nthreads_max) ;
-
-        //----------------------------------------------------------------------
-        // via the factory kernel
-        //----------------------------------------------------------------------
-
-        #ifndef GBCOMPACT
-        GB_IF_FACTORY_KERNELS_ENABLED
-        if (info == GrB_NO_VALUE)
-        { 
-
-            //------------------------------------------------------------------
-            // define the worker for the switch factory
-            //------------------------------------------------------------------
-
-            #define GB_DxB(mult,xname) GB (_DxB_ ## mult ## xname)
-
-            #define GB_BINOP_WORKER(mult,xname)                     \
-            {                                                       \
-                info = GB_DxB(mult,xname) (C, D, B, nthreads) ;     \
-            }                                                       \
-            break ;
-
-            //------------------------------------------------------------------
-            // launch the switch factory
-            //------------------------------------------------------------------
-
-            GB_Type_code xcode, ycode, zcode ;
-            if (GB_binop_builtin (D->type, D_is_pattern, B->type, B_is_pattern,
-                mult, flipxy, &opcode, &xcode, &ycode, &zcode))
-            { 
-                // C=D*B, rowscale with built-in operator
-                #define GB_BINOP_IS_SEMIRING_MULTIPLIER
-                #define GB_NO_PAIR
-                #include "binaryop/factory/GB_binop_factory.c"
-                #undef  GB_BINOP_IS_SEMIRING_MULTIPLIER
-            }
-        }
-        #endif
-
-        //----------------------------------------------------------------------
-        // via the JIT or PreJIT kernel
-        //----------------------------------------------------------------------
-
-        if (info == GrB_NO_VALUE)
-        { 
-            info = GB_rowscale_jit (C, D, B, mult, flipxy, nthreads) ;
+        int ntrials = 1 ;
+        if (compare) {
+            // Force the CPU path to run
+            info = GrB_NO_VALUE ;
+            fprintf (timing_dump, "======== [Kernel: rowscale] [CPU] [Start run: %d] [tot_hits: %d (ratio: %0.3f)] [work: %ld] ========\n",
+                cuda_hits, tot_hits, ((double) cuda_hits) / tot_hits, B->nvals) ;
+            fflush (timing_dump) ;
+            ntrials = 5 ;
         }
 
-        //----------------------------------------------------------------------
-        // via the generic kernel
-        //----------------------------------------------------------------------
-
-        if (info == GrB_NO_VALUE)
-        {
-
-            //------------------------------------------------------------------
-            // C = D*B, row scale, with typecasting or user-defined operator
-            //------------------------------------------------------------------
-
-            //------------------------------------------------------------------
-            // get operators, functions, workspace, contents of D, B, and C
-            //------------------------------------------------------------------
-
-            #include "generic/GB_generic.h"
-            GB_BURBLE_MATRIX (C, "(generic C=D*B rowscale) ") ;
-
-            size_t csize = C->type->size ;
-            size_t dsize = D_is_pattern ? 0 : D->type->size ;
-            size_t bsize = B_is_pattern ? 0 : B->type->size ;
-
-            size_t xsize = mult->xtype->size ;
-            size_t ysize = mult->ytype->size ;
-
-            // scalar workspace: because of typecasting, the x/y types need not
-            // be the same as the size of the D and B types.
-            // flipxy false: dii = (xtype) D(i,i) and bij = (ytype) B(i,j)
-            // flipxy true:  dii = (ytype) D(i,i) and bij = (xtype) B(i,j)
-            size_t dii_size = flipxy ? ysize : xsize ;
-            size_t bij_size = flipxy ? xsize : ysize ;
-
-            GB_cast_function cast_D, cast_B ;
-            if (flipxy)
-            { 
-                // D is typecasted to y, and B is typecasted to x
-                cast_D = D_is_pattern ? NULL :
-                         GB_cast_factory (mult->ytype->code, D->type->code) ;
-                cast_B = B_is_pattern ? NULL :
-                         GB_cast_factory (mult->xtype->code, B->type->code) ;
+        for (int t = 0 ; t < ntrials ; t++) {
+            double t_start, t_end ;
+            if (compare) {
+                t_start = omp_get_wtime () ;
             }
-            else
+            //----------------------------------------------------------------------
+            // determine the number of threads to use
+            //----------------------------------------------------------------------
+
+            int nthreads_max = GB_Context_nthreads_max ( ) ;
+            double chunk = GB_Context_chunk ( ) ;
+            int nthreads = GB_nthreads (GB_nnz_held (B) + B->nvec, chunk,
+                nthreads_max) ;
+
+            //----------------------------------------------------------------------
+            // via the factory kernel
+            //----------------------------------------------------------------------
+
+            #ifndef GBCOMPACT
+            GB_IF_FACTORY_KERNELS_ENABLED
+            if (info == GrB_NO_VALUE)
             { 
-                // D is typecasted to x, and B is typecasted to y
-                cast_D = D_is_pattern ? NULL :
-                         GB_cast_factory (mult->xtype->code, D->type->code) ;
-                cast_B = B_is_pattern ? NULL :
-                         GB_cast_factory (mult->ytype->code, B->type->code) ;
-            }
 
-            //------------------------------------------------------------------
-            // C = D*B via function pointers, and typecasting
-            //------------------------------------------------------------------
+                //------------------------------------------------------------------
+                // define the worker for the switch factory
+                //------------------------------------------------------------------
 
-            // dii = D(i,i), located in Dx [i]
-            #define GB_DECLAREA(dii)                                    \
-                GB_void dii [GB_VLA(dii_size)] ;
-            #define GB_GETA(dii,Dx,i,D_iso)                             \
-                if (!D_is_pattern)                                      \
+                #define GB_DxB(mult,xname) GB (_DxB_ ## mult ## xname)
+
+                #define GB_BINOP_WORKER(mult,xname)                     \
                 {                                                       \
-                    cast_D (dii, Dx +(D_iso ? 0:(i)*dsize), dsize) ;    \
+                    info = GB_DxB(mult,xname) (C, D, B, nthreads) ;     \
+                }                                                       \
+                break ;
+
+                //------------------------------------------------------------------
+                // launch the switch factory
+                //------------------------------------------------------------------
+
+                GB_Type_code xcode, ycode, zcode ;
+                if (GB_binop_builtin (D->type, D_is_pattern, B->type, B_is_pattern,
+                    mult, flipxy, &opcode, &xcode, &ycode, &zcode))
+                { 
+                    // C=D*B, rowscale with built-in operator
+                    #define GB_BINOP_IS_SEMIRING_MULTIPLIER
+                    #define GB_NO_PAIR
+                    #include "binaryop/factory/GB_binop_factory.c"
+                    #undef  GB_BINOP_IS_SEMIRING_MULTIPLIER
+                }
+            }
+            #endif
+
+            //----------------------------------------------------------------------
+            // via the JIT or PreJIT kernel
+            //----------------------------------------------------------------------
+
+            if (info == GrB_NO_VALUE)
+            { 
+                info = GB_rowscale_jit (C, D, B, mult, flipxy, nthreads) ;
+            }
+
+            //----------------------------------------------------------------------
+            // via the generic kernel
+            //----------------------------------------------------------------------
+
+            if (info == GrB_NO_VALUE)
+            {
+
+                //------------------------------------------------------------------
+                // C = D*B, row scale, with typecasting or user-defined operator
+                //------------------------------------------------------------------
+
+                //------------------------------------------------------------------
+                // get operators, functions, workspace, contents of D, B, and C
+                //------------------------------------------------------------------
+
+                #include "generic/GB_generic.h"
+                GB_BURBLE_MATRIX (C, "(generic C=D*B rowscale) ") ;
+
+                size_t csize = C->type->size ;
+                size_t dsize = D_is_pattern ? 0 : D->type->size ;
+                size_t bsize = B_is_pattern ? 0 : B->type->size ;
+
+                size_t xsize = mult->xtype->size ;
+                size_t ysize = mult->ytype->size ;
+
+                // scalar workspace: because of typecasting, the x/y types need not
+                // be the same as the size of the D and B types.
+                // flipxy false: dii = (xtype) D(i,i) and bij = (ytype) B(i,j)
+                // flipxy true:  dii = (ytype) D(i,i) and bij = (xtype) B(i,j)
+                size_t dii_size = flipxy ? ysize : xsize ;
+                size_t bij_size = flipxy ? xsize : ysize ;
+
+                GB_cast_function cast_D, cast_B ;
+                if (flipxy)
+                { 
+                    // D is typecasted to y, and B is typecasted to x
+                    cast_D = D_is_pattern ? NULL :
+                            GB_cast_factory (mult->ytype->code, D->type->code) ;
+                    cast_B = B_is_pattern ? NULL :
+                            GB_cast_factory (mult->xtype->code, B->type->code) ;
+                }
+                else
+                { 
+                    // D is typecasted to x, and B is typecasted to y
+                    cast_D = D_is_pattern ? NULL :
+                            GB_cast_factory (mult->xtype->code, D->type->code) ;
+                    cast_B = B_is_pattern ? NULL :
+                            GB_cast_factory (mult->ytype->code, B->type->code) ;
                 }
 
-            // bij = B(i,j), located in Bx [pB]
-            #define GB_DECLAREB(bij)                                    \
-                GB_void bij [GB_VLA(bij_size)] ;
-            #define GB_GETB(bij,Bx,pB,B_iso)                            \
-                if (!B_is_pattern)                                      \
-                {                                                       \
-                    cast_B (bij, Bx +(B_iso ? 0:(pB)*bsize), bsize) ;   \
+                //------------------------------------------------------------------
+                // C = D*B via function pointers, and typecasting
+                //------------------------------------------------------------------
+
+                // dii = D(i,i), located in Dx [i]
+                #define GB_DECLAREA(dii)                                    \
+                    GB_void dii [GB_VLA(dii_size)] ;
+                #define GB_GETA(dii,Dx,i,D_iso)                             \
+                    if (!D_is_pattern)                                      \
+                    {                                                       \
+                        cast_D (dii, Dx +(D_iso ? 0:(i)*dsize), dsize) ;    \
+                    }
+
+                // bij = B(i,j), located in Bx [pB]
+                #define GB_DECLAREB(bij)                                    \
+                    GB_void bij [GB_VLA(bij_size)] ;
+                #define GB_GETB(bij,Bx,pB,B_iso)                            \
+                    if (!B_is_pattern)                                      \
+                    {                                                       \
+                        cast_B (bij, Bx +(B_iso ? 0:(pB)*bsize), bsize) ;   \
+                    }
+
+                #define GB_C_TYPE GB_void
+
+                #include "ewise/include/GB_ewise_shared_definitions.h"
+
+                // conventional binary op
+                if (flipxy)
+                { 
+                    ASSERT (fmult != NULL) ;
+                    #undef  GB_EWISEOP
+                    #define GB_EWISEOP(Cx,p,y,x,j,i) fmult (Cx +((p)*csize),x,y)
+                    #include "mxm/template/GB_rowscale_template.c"
                 }
-
-            #define GB_C_TYPE GB_void
-
-            #include "ewise/include/GB_ewise_shared_definitions.h"
-
-            // conventional binary op
-            if (flipxy)
-            { 
-                ASSERT (fmult != NULL) ;
-                #undef  GB_EWISEOP
-                #define GB_EWISEOP(Cx,p,y,x,j,i) fmult (Cx +((p)*csize),x,y)
-                #include "mxm/template/GB_rowscale_template.c"
+                else
+                { 
+                    ASSERT (fmult != NULL) ;
+                    #undef  GB_EWISEOP
+                    #define GB_EWISEOP(Cx,p,x,y,i,j) fmult (Cx +((p)*csize),x,y)
+                    #include "mxm/template/GB_rowscale_template.c"
+                }
+                info = GrB_SUCCESS ;
             }
-            else
-            { 
-                ASSERT (fmult != NULL) ;
-                #undef  GB_EWISEOP
-                #define GB_EWISEOP(Cx,p,x,y,i,j) fmult (Cx +((p)*csize),x,y)
-                #include "mxm/template/GB_rowscale_template.c"
+            if (compare) {
+                t_end = omp_get_wtime () ;
+                fprintf (timing_dump, "[Kernel: rowscale] [CPU] trial %d: wall clock: %0.8f s\n", t, t_end - t_start) ;
+                fflush (timing_dump) ;
             }
-            info = GrB_SUCCESS ;
+        }
+        if (compare) {
+            fprintf (timing_dump, "======== [Kernel: rowscale] [CPU] [End run: %d] ========\n\n", cuda_hits) ;
+            fclose (timing_dump) ;
         }
     }
 

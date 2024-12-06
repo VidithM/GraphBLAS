@@ -23,5 +23,18 @@ bool GB_cuda_rowscale_branch
     {
         return false;
     }
-    return true;
+
+    double work = GB_nnz_held (B) ;
+    int ngpus_to_use = GB_ngpus_to_use (work) ;
+    GBURBLE (" work:%g gpus:%d ", work, ngpus_to_use) ;
+    if (ngpus_to_use > 0)
+    {
+        // FIXME: gpu_id = GB_Context_gpu_id_get ( ) ;
+        // cudaSetDevice (gpu_id) ;
+        return (true) ;
+    }
+    else
+    {
+        return (false) ;
+    }
 }

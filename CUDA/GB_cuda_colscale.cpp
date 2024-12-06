@@ -25,7 +25,9 @@ GrB_Info GB_cuda_colscale
     // compute gridsz, blocksz, call GB_cuda_rowscale_jit
     GrB_Index anz = GB_nnz_held (A) ;
     
-    int32_t gridsz = 1 + (anz >> LOG2_BLOCK_SIZE) ;
+    int32_t number_of_sms = GB_Global_gpu_sm_get (0) ;
+    int64_t raw_gridsz = GB_ICEIL (anz, BLOCK_SIZE) ;
+    int32_t gridsz = std::min (raw_gridsz, (int64_t) (number_of_sms * 256)) ;
 
     GrB_Info info = GB_cuda_colscale_jit ( C, A, D, 
         semiring->multiply, flipxy, stream, gridsz, BLOCK_SIZE) ;

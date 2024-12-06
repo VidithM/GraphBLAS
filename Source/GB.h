@@ -10,6 +10,15 @@
 #ifndef GB_H
 #define GB_H
 
+#define TIMING
+#define VIDITH_LOCAL
+
+#ifdef VIDITH_LOCAL
+    #define RESULTS_DIR "/home/vidith/Desktop/cuda-results/"
+#else
+    #define RESULTS_DIR "/home/grads/v/vidithm/cuda-results/"
+#endif
+
 #include "include/GB_include.h"
 #include "global/GB_Global.h"
 #include "print/GB_printf.h"

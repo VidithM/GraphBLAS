@@ -25,12 +25,14 @@ GrB_Info GB_cuda_rowscale
     // compute gridsz, blocksz, call GB_cuda_rowscale_jit
     GrB_Index bnz = GB_nnz_held (B) ;
     
-    int32_t gridsz = 1 + (bnz >> LOG2_BLOCK_SIZE) ;
+    int32_t number_of_sms = GB_Global_gpu_sm_get (0) ;
+    int64_t raw_gridsz = GB_ICEIL (bnz, BLOCK_SIZE) ;
+    int32_t gridsz = std::min (raw_gridsz, (int64_t) (number_of_sms * 256)) ;
 
     GrB_Info info = GB_cuda_rowscale_jit ( C, D, B, 
         semiring->multiply, flipxy, stream, gridsz, BLOCK_SIZE) ;
     
-    if (info == GrB_NO_VALUE) info = GrB_PANIC ;
+    // if (info == GrB_NO_VALUE) info = GrB_PANIC ;
     GB_OK (info) ;
 
     CUDA_OK (cudaStreamSynchronize (stream)) ;

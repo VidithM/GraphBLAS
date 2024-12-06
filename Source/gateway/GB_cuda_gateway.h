@@ -50,13 +50,11 @@ GB_cuda_device ;
 //------------------------------------------------------------------------------
 // GB_ngpus_to_use: determine # of GPUs to use for the next computation
 //------------------------------------------------------------------------------
-
 static inline int GB_ngpus_to_use
 (
     double work                 // total work to do
 )
 {
-
     // gpu_hack: for testing only
     //  2: never use GPU
     //  1: always use GPU
