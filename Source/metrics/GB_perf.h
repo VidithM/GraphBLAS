@@ -115,9 +115,6 @@ extern struct timing_context timing_ctx ;
     GET (ntrials) = (GET (do_timing) ? _ntrials : 1) ;               \
     GET (curr_trial) = 0 ;                                           \
     for (; GET (curr_trial) < GET (ntrials) ; GET (curr_trial)++) {  \
-        if (GET (curr_trial) > 0) {                                  \
-            fprintf ( GET (stats_file), "\n") ;                      \
-        }
 
 #define END_TRIALS                                                   \
         if (GET (curr_trial) < GET (ntrials) - 1) {                  \
@@ -138,19 +135,23 @@ extern struct timing_context timing_ctx ;
 #if defined(_OPENMP) && defined(_OMP_H)
 // Use omp_get_wtime()
 #define START_TIME                          \
+{                                           \
     GET (subtrial_name) = "N/A" ;           \
     GET (t_start) = omp_get_wtime () ;      \
+}
 
 #define START_TIME_NAMED(name)              \
+{                                           \
     GET (subtrial_name) = name ;            \
     GET (t_start) = omp_get_wtime () ;      \
-    
+}
+
 #define STOP_TIME                                                    \
 {                                                                    \
     if (GET (do_timing)) {                                           \
         double _t_end = omp_get_wtime () ;                           \
         fprintf (GET (stats_file), "[trial: %-3d] "                  \
-            "[subtrial: %-15s] "                                      \
+            "[subtrial: %-15s] "                                     \
             "wall clock: %0.8fs\n", GET (curr_trial),                \
             GET (subtrial_name), _t_end - GET (t_start)) ;           \
         fflush (GET (stats_file)) ;                                  \
@@ -159,16 +160,36 @@ extern struct timing_context timing_ctx ;
 
 #else
 
-#if defined(GB_CUDA_KERNEL)
-// We are in CUDA, so OpenMP is not available.
-// Can use C++ std::high_resolution_clock
-// TODO: Finish this
+#if defined(__cplusplus)
+// In non-JIT CUDA host code; can use
+// C++ chrono::high_resolution_clock
 #define START_TIME                                                   \
-    auto _t_start = std::chrono::high_resolution_clock::now () ;
+{                                                                    \
+    GET(subtrial_name) = "N/A" ;                                     \
+    auto _t_start = std::chrono::high_resolution_clock::now () ;     \
+    GET(t_start) = _t_start.time_since_epoch().count() ;             \
+}
+
+#define START_TIME_NAMED(name)                                       \
+{                                                                    \
+    GET(subtrial_name) = name ;                                      \
+    auto _t_start = std::chrono::high_resolution_clock::now () ;     \
+    GET(t_start) = _t_start.time_since_epoch().count() ;             \
+}
 
 #define STOP_TIME                                                    \
 {                                                                    \
-    auto t_end = std::chrono::high_resolution_clock::now () ;        \
+    if (GET (do_timing)) {                                           \
+        auto t_end = std::chrono::high_resolution_clock::now()       \
+            .time_since_epoch().count() ;                            \
+        double duration = t_end - GET (t_start) ;                    \
+        duration /= 1e9 ;                                            \
+        fprintf (GET (stats_file), "[trial: %-3d] "                  \
+            "[subtrial: %-15s] "                                     \
+            "wall clock: %0.8fs\n", GET (curr_trial),                \
+            GET (subtrial_name), duration) ;                         \
+        fflush (GET (stats_file)) ;                                  \
+    }                                                                \
 }
 #endif // ifdef GB_CUDA_KERNEL
 

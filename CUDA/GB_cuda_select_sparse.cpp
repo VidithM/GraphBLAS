@@ -1,6 +1,7 @@
 #define GB_DEBUG
 
 #include "GB_cuda_select.hpp"
+#include <chrono>
 
 #undef GB_FREE_ALL
 #define GB_FREE_ALL         \
@@ -22,6 +23,7 @@ GrB_Info GB_cuda_select_sparse
     const GB_void *ythunk
 )
 {
+    START_TIME ;
     // check inputs
     ASSERT (C != NULL && !(C->static_header)) ;
     ASSERT (A != NULL && !(A->static_header)) ;
@@ -57,6 +59,8 @@ GrB_Info GB_cuda_select_sparse
     ASSERT (C->x != NULL) ;
 
     GB_OK (info) ;
+
+    STOP_TIME ;
 
     if (C_iso)
     {

@@ -27,6 +27,9 @@
     GB_FREE_WORK (&ythunk, ythunk_size) ;   \
     GB_FREE_WORK (&athunk, athunk_size) ;
 
+static int tot_hits = 0 ;
+static int cuda_hits = 0 ;
+
 GrB_Info GB_selector
 (
     GrB_Matrix C,               // output matrix, NULL or existing header
@@ -187,10 +190,18 @@ GrB_Info GB_selector
 
     info = GrB_NO_VALUE ;
 
+    OPEN_STATS ("select_sparse", &tot_hits, &cuda_hits) ;
+    #define TRIAL_FREE        \
+        GB_phybix_free (C) ;
+    #define STATS_RESET       \
+        GB_phybix_free (C) ;
+
     #if defined ( GRAPHBLAS_HAS_CUDA )
     if ((GB_IS_SPARSE (A) || GB_IS_HYPERSPARSE (A))
         && GB_cuda_select_branch (A, op))
     {
+        BEGIN_STATS ("gpu", A->nvals) ;
+        BEGIN_TRIALS (5) ;
         // It is possible for non-sparse matrices to use the sparse kernel; see
         // the use_select_bitmap test above (the DIAG operator). The CUDA
         // select_sparse kernel will not work in this case, so make this go to
@@ -198,14 +209,26 @@ GrB_Info GB_selector
         // FIXME: put the test of sparse(A) or hypersparse(A) in
         // GB_cuda_select_branch.
         info = GB_cuda_select_sparse (C, C_iso, op, flipij, A, athunk, ythunk) ;
+
+        END_TRIALS ;
+        END_STATS ;
     }
     #endif
 
     if (info == GrB_NO_VALUE)
     {
+        BEGIN_STATS ("cpu", A->nvals) ;
+        BEGIN_TRIALS (5) ;
+        START_TIME ;
+
         info = GB_select_sparse (C, C_iso, op, flipij, A, ithunk, athunk,
             ythunk, Werk) ;
+            
+        STOP_TIME ;
+        END_TRIALS ;
+        END_STATS ;
     }
+    CLOSE_STATS ;
 
     GB_OK (info) ;  // check for out-of-memory or other failures
 
