@@ -162,25 +162,25 @@ extern struct timing_context timing_ctx ;
 
 #if defined(__cplusplus)
 // In non-JIT CUDA host code; can use
-// C++ chrono::high_resolution_clock
+// C++ chrono::system_clock
 #define START_TIME                                                   \
 {                                                                    \
     GET(subtrial_name) = "N/A" ;                                     \
-    auto _t_start = std::chrono::high_resolution_clock::now () ;     \
+    auto _t_start = std::chrono::system_clock::now () ;              \
     GET(t_start) = _t_start.time_since_epoch().count() ;             \
 }
 
 #define START_TIME_NAMED(name)                                       \
 {                                                                    \
     GET(subtrial_name) = name ;                                      \
-    auto _t_start = std::chrono::high_resolution_clock::now () ;     \
+    auto _t_start = std::chrono::system_clock::now () ;              \
     GET(t_start) = _t_start.time_since_epoch().count() ;             \
 }
 
 #define STOP_TIME                                                    \
 {                                                                    \
     if (GET (do_timing)) {                                           \
-        auto t_end = std::chrono::high_resolution_clock::now()       \
+        auto t_end = std::chrono::system_clock::now()                \
             .time_since_epoch().count() ;                            \
         double duration = t_end - GET (t_start) ;                    \
         duration /= 1e9 ;                                            \
@@ -191,7 +191,7 @@ extern struct timing_context timing_ctx ;
         fflush (GET (stats_file)) ;                                  \
     }                                                                \
 }
-#endif // ifdef GB_CUDA_KERNEL
+#endif // ifdef __cplusplus
 
 #endif // ifdef _OPENMP and _OMP_H
 
