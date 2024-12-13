@@ -99,6 +99,7 @@ extern struct timing_context timing_ctx ;
         fflush (GET (stats_file)) ;                                  \
         if (!strcmp (GET (loc), "gpu")) {                            \
             info = GrB_NO_VALUE ;                                    \
+            STATS_RESET ;                                            \
         }                                                            \
     }                                                                \
 }
