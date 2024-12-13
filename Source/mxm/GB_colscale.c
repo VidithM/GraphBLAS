@@ -28,6 +28,9 @@
     GB_phybix_free (C) ;            \
 }
 
+static int tot_hits = 0 ;
+static int cuda_hits = 0 ;
+
 GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
 (
     GrB_Matrix C,                   // output matrix, static header
@@ -210,13 +213,27 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
         }
 
         info = GrB_NO_VALUE ;
+        OPEN_STATS ("colscale", &tot_hits, &cuda_hits) ;
+        #define TRIAL_FREE
+        #define STATS_RESET
 
         #if defined ( GRAPHBLAS_HAS_CUDA )
         if (GB_cuda_colscale_branch (A, D, semiring, flipxy))
         {
+            BEGIN_STATS ("gpu", A->nvals) ;
+            BEGIN_TRIALS (5) ;
+            START_TIME ;
             info = GB_cuda_colscale (C, A, D, semiring, flipxy) ;
+            STOP_TIME ;
+            END_TRIALS ;
+            END_STATS ;
         }
         #endif
+
+        BEGIN_STATS ("cpu", A->nvals) ;
+        #undef TRIAL_FREE
+        #define TRIAL_FREE info = GrB_NO_VALUE ;
+        BEGIN_TRIALS (5) ;
 
         //----------------------------------------------------------------------
         // determine the number of threads to use
@@ -240,7 +257,7 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
         GB_IF_FACTORY_KERNELS_ENABLED
         if (info == GrB_NO_VALUE)
         { 
-
+            START_TIME_NAMED ("factory") ;
             //------------------------------------------------------------------
             // define the worker for the switch factory
             //------------------------------------------------------------------
@@ -268,6 +285,7 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
                 #include "binaryop/factory/GB_binop_factory.c"
                 #undef  GB_BINOP_IS_SEMIRING_MULTIPLIER
             }
+            STOP_TIME ;
         }
         #endif
 
@@ -277,8 +295,10 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
 
         if (info == GrB_NO_VALUE)
         { 
+            START_TIME_NAMED ("jit") ;
             info = GB_colscale_jit (C, A, D, mult, flipxy,
                 A_ek_slicing, A_ntasks, A_nthreads) ;
+            STOP_TIME ;
         }
 
         //----------------------------------------------------------------------
@@ -287,7 +307,7 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
 
         if (info == GrB_NO_VALUE)
         {
-
+            START_TIME_NAMED ("generic") ;
             //------------------------------------------------------------------
             // get operators, functions, workspace, contents of A, D, and C
             //------------------------------------------------------------------
@@ -367,7 +387,12 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
                 #include "mxm/template/GB_colscale_template.c"
             }
             info = GrB_SUCCESS ;
+            STOP_TIME ;
         }
+        END_TRIALS ;
+        END_STATS ;
+
+        CLOSE_STATS ;
     }
 
     if (info != GrB_SUCCESS)
