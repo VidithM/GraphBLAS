@@ -1,6 +1,19 @@
 #include "GB.h"
+#include "GB_timing_context.h"
 
-static const char *allow_timing [] = {
+struct timing_context timing_ctx = {
+    .stats_file = NULL,
+    .kern_name = NULL,
+    .subtrial_name = NULL,
+    .loc = NULL,
+    .cuda_hits = NULL,
+    .tot_hits = NULL,
+    .ntrials = 0,
+    .curr_trial = 0,
+    .do_timing = false
+} ;
+
+const char *allow_timing [] = {
     "select_sparse",
     "select_bitmap",
     "rowscale",

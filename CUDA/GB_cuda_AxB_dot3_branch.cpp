@@ -46,7 +46,7 @@ bool GB_cuda_AxB_dot3_branch
 
     int ngpus_to_use = GB_ngpus_to_use (work) ;
     GBURBLE (" work:%g GPUs:%d ", work, ngpus_to_use) ;
-    return false ;
+
     if (ngpus_to_use > 0)
     {
         // FIXME: or do this in GB_AxB_dot3_cuda

@@ -53,7 +53,8 @@
 
     // parition the space into ntasks, to do this in parallel:
     // for (p = 0 ; p < bnz ; p++) { ... work on Bi [p] and Bx [p] ... }
-
+    // printf ("In jit kernel, bnz is: %ld\n", bnz) ;
+    // START_TIME_NAMED ("jit kernel") ;
     int tid ;
     #pragma omp parallel for num_threads(nthreads) schedule(static)
     for (tid = 0 ; tid < ntasks ; tid++)
@@ -71,5 +72,6 @@
             GB_EWISEOP (Cx, p, dii, bij, 0, 0) ;    // C(i,j) = dii*bij
         }
     }
+    // STOP_TIME ;
 }
 

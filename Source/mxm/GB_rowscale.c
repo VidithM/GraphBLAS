@@ -18,6 +18,9 @@
 
 #define GB_FREE_ALL GB_phybix_free (C) ;
 
+static int tot_hits = 0 ;
+static int cuda_hits = 0 ;
+
 GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
 (
     GrB_Matrix C,                   // output matrix, static header
@@ -200,25 +203,24 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
 
         info = GrB_NO_VALUE ;
 
-        // OPEN_STATS ("rowscale", &tot_hits, &cuda_hits) ;
+        OPEN_STATS ("rowscale", &tot_hits, &cuda_hits) ;
+        #define TRIAL_FREE
 
         #if defined ( GRAPHBLAS_HAS_CUDA )
         if (GB_cuda_rowscale_branch (D, B, semiring, flipxy))
         {
-            // #define TRIAL_FREE
-
-            // BEGIN_STATS ("gpu", B->nvals) ;
-            // BEGIN_TRIALS (5) ;
-            // START_TIME ;
+            BEGIN_STATS ("gpu", B->nvals) ;
+            BEGIN_TRIALS (5) ;
+            START_TIME ;
             info = GB_cuda_rowscale (C, D, B, semiring, flipxy) ;
-            // STOP_TIME ;
-            // END_TRIALS ;
-            // END_STATS ;
+            STOP_TIME ;
+            END_TRIALS ;
+            END_STATS ;
         }
         #endif
 
-        // BEGIN_STATS ("cpu", B->nvals) ;
-        // BEGIN_TRIALS (5) ;
+        BEGIN_STATS ("cpu", B->nvals) ;
+        BEGIN_TRIALS (5) ;
         //----------------------------------------------------------------------
         // determine the number of threads to use
         //----------------------------------------------------------------------
@@ -227,8 +229,6 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
         double chunk = GB_Context_chunk ( ) ;
         int nthreads = GB_nthreads (GB_nnz_held (B) + B->nvec, chunk,
             nthreads_max) ;
-
-        // START_TIME ;
         //----------------------------------------------------------------------
         // via the factory kernel
         //----------------------------------------------------------------------
@@ -236,7 +236,8 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
         #ifndef GBCOMPACT
         GB_IF_FACTORY_KERNELS_ENABLED
         if (info == GrB_NO_VALUE)
-        { 
+        {
+            START_TIME_NAMED ("factory") ;
 
             //------------------------------------------------------------------
             // define the worker for the switch factory
@@ -264,17 +265,19 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
                 #include "binaryop/factory/GB_binop_factory.c"
                 #undef  GB_BINOP_IS_SEMIRING_MULTIPLIER
             }
+            STOP_TIME ;
         }
         #endif
 
         //----------------------------------------------------------------------
         // via the JIT or PreJIT kernel
         //----------------------------------------------------------------------
-
+        // START_TIME_NAMED ("jit") ;
         if (info == GrB_NO_VALUE)
         { 
             info = GB_rowscale_jit (C, D, B, mult, flipxy, nthreads) ;
         }
+        // STOP_TIME ;
 
         //----------------------------------------------------------------------
         // via the generic kernel
@@ -282,6 +285,7 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
 
         if (info == GrB_NO_VALUE)
         {
+            START_TIME_NAMED ("generic") ;
 
             //------------------------------------------------------------------
             // C = D*B, row scale, with typecasting or user-defined operator
@@ -368,7 +372,12 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
                 #include "mxm/template/GB_rowscale_template.c"
             }
             info = GrB_SUCCESS ;
+            STOP_TIME ;
         }
+        END_TRIALS ;
+        END_STATS ;
+        
+        CLOSE_STATS ;
     }
 
     if (info != GrB_SUCCESS)

@@ -189,7 +189,7 @@ GrB_Info GB_selector
 
     #if defined ( GRAPHBLAS_HAS_CUDA )
     if ((GB_IS_SPARSE (A) || GB_IS_HYPERSPARSE (A))
-        && GB_cuda_select_branch (A, op))
+        && false && GB_cuda_select_branch (A, op))
     {
         // It is possible for non-sparse matrices to use the sparse kernel; see
         // the use_select_bitmap test above (the DIAG operator). The CUDA
