@@ -9,7 +9,7 @@
 
 // FIXME: 32/64-bit.
 
-#define GB_DEBUG
+// #define GB_DEBUG
 
 #include "select/GB_select.h"
 #ifndef GBCOMPACT

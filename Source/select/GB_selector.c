@@ -7,7 +7,7 @@
 
 //------------------------------------------------------------------------------
 
-#define GB_DEBUG
+// #define GB_DEBUG
 
 // GB_selector does the work for GB_select.  It also deletes zombies for
 // GB_wait using the GxB_NONZOMBIE operator, deletes entries outside a smaller

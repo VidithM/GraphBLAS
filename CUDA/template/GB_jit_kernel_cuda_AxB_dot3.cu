@@ -10,7 +10,7 @@
 
 // GB_jit_kernel_cuda_AxB_dot3: C<M>=A'*B using the dot3 method on the GPU.
 
-#define GB_DEBUG
+// #define GB_DEBUG
 
 #define GB_FREE_ALL ;
 
