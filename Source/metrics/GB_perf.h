@@ -98,8 +98,8 @@ extern struct timing_context timing_ctx ;
             GET (kern_name), GET (loc), _cuda_hits) ;                \
         fflush (GET (stats_file)) ;                                  \
         if (!strcmp (GET (loc), "gpu")) {                            \
-            info = GrB_NO_VALUE ;                                    \
             STATS_RESET ;                                            \
+            info = GrB_NO_VALUE ;                                    \
         }                                                            \
     }                                                                \
 }
@@ -165,16 +165,16 @@ extern struct timing_context timing_ctx ;
 // C++ chrono::system_clock
 #define START_TIME                                                   \
 {                                                                    \
-    GET(subtrial_name) = "N/A" ;                                     \
+    GET (subtrial_name) = "N/A" ;                                    \
     auto _t_start = std::chrono::system_clock::now () ;              \
-    GET(t_start) = _t_start.time_since_epoch().count() ;             \
+    GET (t_start) = _t_start.time_since_epoch().count () ;           \
 }
 
 #define START_TIME_NAMED(name)                                       \
 {                                                                    \
-    GET(subtrial_name) = name ;                                      \
+    GET (subtrial_name) = name ;                                     \
     auto _t_start = std::chrono::system_clock::now () ;              \
-    GET(t_start) = _t_start.time_since_epoch().count() ;             \
+    GET (t_start) = _t_start.time_since_epoch().count () ;           \
 }
 
 #define STOP_TIME                                                    \

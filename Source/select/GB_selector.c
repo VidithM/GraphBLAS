@@ -193,8 +193,7 @@ GrB_Info GB_selector
     OPEN_STATS ("select_sparse", &tot_hits, &cuda_hits) ;
     #define TRIAL_FREE        \
         GB_phybix_free (C) ;
-    #define STATS_RESET       \
-        GB_phybix_free (C) ;
+    #define STATS_RESET TRIAL_FREE
 
     #if defined ( GRAPHBLAS_HAS_CUDA )
     if ((GB_IS_SPARSE (A) || GB_IS_HYPERSPARSE (A))

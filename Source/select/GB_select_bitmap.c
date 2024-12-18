@@ -16,6 +16,9 @@
 #define GB_FREE_ALL         \
     GB_phybix_free (C) ;
 
+static int tot_hits = 0 ;
+static int cuda_hits = 0 ;
+
 GrB_Info GB_select_bitmap
 (
     GrB_Matrix C,               // output matrix, static header
@@ -96,23 +99,49 @@ GrB_Info GB_select_bitmap
 
     info = GrB_NO_VALUE ;
 
+    OPEN_STATS ("select_bitmap", &tot_hits, &cuda_hits) ;
+    
+    #define TRIAL_FREE                                               \
+    {                                                                \
+        GB_phybix_free (C) ;                                         \
+        GB_OK (GB_new_bix (&C,                                       \
+            A->type, A->vlen, A->vdim, GB_ph_calloc, true,           \
+            GxB_BITMAP, false, A->hyper_switch, -1, anz, true, C_iso,\
+            false, false)) ;                                         \
+        info = GrB_NO_VALUE ;                                        \
+    }
+    #define STATS_RESET TRIAL_FREE
+
     #if defined ( GRAPHBLAS_HAS_CUDA )
     if (GB_cuda_select_branch (A, op))
     {
+        BEGIN_STATS ("gpu", anz) ;
+        BEGIN_TRIALS (5) ;
+        START_TIME ;
+
         info = GB_cuda_select_bitmap (C, A, flipij, ythunk, op) ;
+
+        STOP_TIME ;
+        END_TRIALS ;
+        END_STATS ;
     }
     #endif
 
     if (info == GrB_NO_VALUE)
     {
+        BEGIN_STATS ("cpu", anz) ;
+        BEGIN_TRIALS (5) ;
+
         if (GB_IS_INDEXUNARYOP_CODE_POSITIONAL (opcode))
-        { 
+        {
+            START_TIME_NAMED ("positional") ;
 
             //------------------------------------------------------------------
             // bitmap selector for positional ops
             //------------------------------------------------------------------
-
             info = GB_select_positional_bitmap (C, A, ithunk, op, nthreads) ;
+
+            STOP_TIME ;
         }
         else
         { 
@@ -123,7 +152,8 @@ GrB_Info GB_select_bitmap
 
             #ifndef GBCOMPACT
             GB_IF_FACTORY_KERNELS_ENABLED
-            { 
+            {
+                START_TIME_NAMED ("factory") ;
 
                 //--------------------------------------------------------------
                 // via the factory kernel 
@@ -138,6 +168,8 @@ GrB_Info GB_select_bitmap
                 break ;
 
                 #include "select/factory/GB_select_entry_factory.c"
+
+                STOP_TIME ;
             }
             #endif
 
@@ -146,9 +178,13 @@ GrB_Info GB_select_bitmap
             //------------------------------------------------------------------
 
             if (info == GrB_NO_VALUE)
-            { 
+            {
+                START_TIME_NAMED ("jit") ;
+
                 info = GB_select_bitmap_jit (C, A, flipij, ythunk, op,
                     nthreads) ;
+
+                STOP_TIME ;
             }
 
             //------------------------------------------------------------------
@@ -157,12 +193,21 @@ GrB_Info GB_select_bitmap
 
             if (info == GrB_NO_VALUE)
             { 
+                START_TIME_NAMED ("generic") ;
+
                 GBURBLE ("(generic select) ") ;
                 info = GB_select_generic_bitmap (C, A, flipij, ythunk, op,
                     nthreads) ;
+
+                STOP_TIME ;
             }
         }
+        
+        END_TRIALS ;
+        END_STATS ;
     }
+
+    CLOSE_STATS ;
 
     //--------------------------------------------------------------------------
     // return result
