@@ -204,8 +204,13 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
         info = GrB_NO_VALUE ;
 
         OPEN_STATS ("rowscale", &tot_hits, &cuda_hits) ;
-        #define TRIAL_FREE
-        #define STATS_RESET
+        #define TRIAL_FREE                                          \
+        {                                                           \
+            GB_phybix_free (C) ;                                    \
+            GB_OK (GB_dup_worker (&C, C_iso, B, false, ztype)) ;    \
+            info = GrB_NO_VALUE ;                                   \
+        }
+        #define STATS_RESET TRIAL_FREE
 
         #if defined ( GRAPHBLAS_HAS_CUDA )
         if (GB_cuda_rowscale_branch (D, B, semiring, flipxy))
@@ -221,8 +226,6 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
         #endif
 
         BEGIN_STATS ("cpu", B->nvals) ;
-        #undef TRIAL_FREE
-        #define TRIAL_FREE info = GrB_NO_VALUE ;
         BEGIN_TRIALS (5) ;
         //----------------------------------------------------------------------
         // determine the number of threads to use

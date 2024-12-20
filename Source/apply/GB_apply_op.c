@@ -28,7 +28,16 @@
 #define GB_FREE_ALL                         \
 {                                           \
     GB_WERK_POP (A_ek_slicing, int64_t) ;   \
+    GB_FREE_WORK (&Cx_copy, Cx_size) ;      \
 }
+
+static int unop_pos_tot_hits = 0 ;
+static int unop_pos_cuda_hits = 0 ;
+static int unop_npos_tot_hits = 0 ;
+static int unop_npos_cuda_hits = 0 ;
+
+static int binop_tot_hits = 0 ;
+static int binop_cuda_hits = 0 ;
 
 GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
 (
@@ -68,6 +77,15 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
     const int8_t *Ab = A->b ;               // only if A is bitmap
     const GrB_Type Atype = A->type ;        // type of A->x
     const int64_t anz = GB_nnz_held (A) ;   // size of A->x and Cx
+
+    GB_void *Cx_copy = NULL ;
+    size_t Cx_size = 0 ;
+    int64_t Cx_len ;
+
+    // Cx_copy needed for TRIAL_FREE and STATS_RESET in timing trials
+    Cx_len = (C_code_iso == GB_NON_ISO ? anz : 1) ;
+    Cx_copy = (void *) GB_MALLOC_WORK (Cx_len * ctype->size, char, &Cx_size) ;
+    GB_memcpy ((void *) Cx_copy, Cx, Cx_size, 1) ;
 
     //--------------------------------------------------------------------------
     // determine the maximum number of threads to use
@@ -172,6 +190,13 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
     // apply the operator
     //--------------------------------------------------------------------------
 
+    #define TRIAL_FREE                                     \
+    {                                                      \
+        GB_memcpy ((void *) Cx, Cx_copy, Cx_size, 1) ;     \
+        info = GrB_NO_VALUE ;                              \
+    }
+    #define STATS_RESET TRIAL_FREE
+
     if (GB_OPCODE_IS_POSITIONAL (opcode))
     {
 
@@ -181,15 +206,27 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
 
         ASSERT_OP_OK (op, "positional unop/idxunop: GB_apply_op", GB0) ;
 
+        OPEN_STATS ("apply_unop_positional", &unop_pos_tot_hits, 
+            &unop_pos_cuda_hits) ;
+
         #if defined ( GRAPHBLAS_HAS_CUDA )
         if (GB_cuda_apply_unop_branch (ctype, A, op)) {
+            BEGIN_STATS ("gpu", anz) ;
+            BEGIN_TRIALS (5) ;
+            START_TIME ;
             info = GB_cuda_apply_unop (Cx, ctype, op, flipij, A,
                 (GB_void *) &thunk) ;
+            STOP_TIME ;
+            END_TRIALS ;
+            END_STATS ;
         } 
         #endif
         
         if (info == GrB_NO_VALUE)
         {
+            BEGIN_STATS ("cpu", anz) ;
+            BEGIN_TRIALS (5) ;
+            START_TIME ;
             // get A and C
             const uint64_t *restrict Ap = A->p ;    // FIXME
             const int64_t *restrict Ah = A->h ;
@@ -361,8 +398,12 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
                     default: ;
                 }
             }
+            STOP_TIME ;
+            END_TRIALS ;
+            END_STATS ;
             info = GrB_SUCCESS ;
         }
+        CLOSE_STATS ;
     }
     else if (C_code_iso != GB_NON_ISO)
     {
@@ -390,23 +431,35 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
         // unop via the factory kernel
         //----------------------------------------------------------------------
 
+        OPEN_STATS ("apply_unop_nonpositional", &unop_npos_tot_hits,
+            &unop_npos_cuda_hits) ;
+
         ASSERT_OP_OK (op, "unop for GB_apply_op", GB0) ;
         ASSERT (!A->iso) ;
 
         #if defined ( GRAPHBLAS_HAS_CUDA )
         if (GB_cuda_apply_unop_branch (ctype, A, op)) {
+            BEGIN_STATS ("gpu", anz) ;
+            BEGIN_TRIALS (5) ;
+            START_TIME ;
             info = GB_cuda_apply_unop (Cx, ctype, op, flipij, A, NULL) ;
+            STOP_TIME ;
+            END_TRIALS ;
+            END_STATS ;
         } 
         #endif
 
+        BEGIN_STATS ("cpu", anz) ;
+        BEGIN_TRIALS (5) ;
         // determine number of threads to use
         #ifndef GBCOMPACT
         if (info == GrB_NO_VALUE)
         {
             GB_IF_FACTORY_KERNELS_ENABLED
-            { 
+            {
                 if (Atype == op->xtype || opcode == GB_IDENTITY_unop_code)
-                { 
+                {
+                    START_TIME_NAMED ("factory") ;  
 
                     // The switch factory is used if the op is IDENTITY, or if
                     // no typecasting.  IDENTITY operator can do arbitrary
@@ -431,6 +484,8 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
                     //----------------------------------------------------------
 
                     #include "apply/factory/GB_unop_factory.c"
+
+                    STOP_TIME ;
                 }
             }
         }
@@ -442,8 +497,10 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
 
         if (info == GrB_NO_VALUE)
         { 
+            START_TIME_NAMED ("jit") ;
             info = GB_apply_unop_jit (Cx, ctype, op, flipij, A,
                 NULL, NULL, 0, A_nthreads) ;
+            STOP_TIME ;
         }
 
         //----------------------------------------------------------------------
@@ -452,6 +509,7 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
 
         if (info == GrB_NO_VALUE)
         { 
+            START_TIME_NAMED ("generic") ;
             GB_BURBLE_N (anz, "(generic unop apply: %s) ", op->name) ;
 
             size_t asize = Atype->size ;
@@ -472,7 +530,12 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
             #include "apply/template/GB_apply_unop_ip.c"
 
             info = GrB_SUCCESS ;
+            STOP_TIME ;
         }
+        END_TRIALS ;
+        END_STATS ;
+
+        CLOSE_STATS ;
 
     }
     else if (op_is_binop)
@@ -525,26 +588,33 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
             cast_s (swork, scalar->x, ssize) ;
             scalarx = swork ;
         }
-
-        //----------------------------------------------------------------------
-        // via the factory kernel
-        //----------------------------------------------------------------------
+        OPEN_STATS ("apply_binop", &binop_tot_hits,
+            &binop_cuda_hits) ;
 
         if (binop_bind1st)
         {
-
             //------------------------------------------------------------------
             // z = binop (scalar,Ax)
             //------------------------------------------------------------------
-
             #if defined ( GRAPHBLAS_HAS_CUDA )
             if (GB_cuda_apply_binop_branch (ctype, (GrB_BinaryOp) op, A))
             {
+                BEGIN_STATS ("gpu", anz) ;
+                BEGIN_TRIALS (5) ;
+                START_TIME_NAMED ("bind1st") ;
                 info = GB_cuda_apply_binop (Cx, ctype, (GrB_BinaryOp) op, A,
                     scalarx, true) ;
+                STOP_TIME ;
+                END_TRIALS ;
+                END_STATS ;
             } 
             #endif
 
+            //----------------------------------------------------------------------
+            // via the factory kernel
+            //----------------------------------------------------------------------
+            BEGIN_STATS ("cpu", anz) ;
+            BEGIN_TRIALS (5) ;
             #ifndef GBCOMPACT
             if (info == GrB_NO_VALUE)
             {
@@ -553,7 +623,8 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
                     if (GB_binop_builtin (op->xtype, false, Atype, false,
                         (GrB_BinaryOp) op, false, &opcode, &xcode, &ycode,
                         &zcode))
-                    { 
+                    {
+                        START_TIME_NAMED ("bind1st, factory") ; 
 
                         //------------------------------------------------------
                         // define the worker for the switch factory
@@ -576,6 +647,8 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
                         #define GB_NO_SECOND
                         #define GB_NO_PAIR
                         #include "binaryop/factory/GB_binop_factory.c"
+
+                        STOP_TIME ;
                     }
                 }
             }
@@ -587,9 +660,44 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
 
             if (info == GrB_NO_VALUE)
             { 
+                START_TIME_NAMED ("bind1st, jit") ;
                 info = GB_apply_bind1st_jit (Cx, ctype,
                     (GrB_BinaryOp) op, scalarx, A, A_nthreads) ;
+                STOP_TIME ;
             }
+
+            //----------------------------------------------------------------------
+            // via the generic kernel
+            //----------------------------------------------------------------------
+
+            if (info == GrB_NO_VALUE)
+            {
+                START_TIME_NAMED ("bind1st, generic") ;
+
+                GB_BURBLE_N (anz, "(generic binop apply: %s) ", op->name) ;
+
+                GB_Type_code acode = Atype->code ;
+                GxB_binary_function fop = op->binop_function ;
+                ASSERT (fop != NULL) ;
+                ASSERT (!A->iso) ;
+
+                // Cx = binop (scalar,Ax) with bind1st
+                GB_cast_function cast_A_to_Y = GB_cast_factory (ycode, acode) ;
+                #define GB_APPLY_OP(pC,pA)                          \
+                    /* ywork = (ytype) Ax [pA] */                   \
+                    GB_void ywork [GB_VLA(ysize)] ;                 \
+                    cast_A_to_Y (ywork, Ax +(pA)*asize, asize) ;    \
+                    /* Cx [pC] = fop (scalarx, ywork) */            \
+                    fop (Cx +((pC)*zsize), scalarx, ywork) ;
+                #include "apply/template/GB_apply_unop_ip.c"
+            
+                info = GrB_SUCCESS ;
+
+                STOP_TIME ;
+            }
+
+            END_TRIALS ;
+            END_STATS ;
 
         }
         else
@@ -602,12 +710,19 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
             #if defined ( GRAPHBLAS_HAS_CUDA )
             if (GB_cuda_apply_binop_branch (ctype, (GrB_BinaryOp) op, A))
             {
+                BEGIN_STATS ("gpu", anz) ;
+                BEGIN_TRIALS (5) ;
+                START_TIME_NAMED ("bind2nd") ;
                 info = GB_cuda_apply_binop (Cx, ctype, (GrB_BinaryOp) op, A,
                 scalarx, false) ;
+                STOP_TIME ;
+                END_TRIALS ;
+                END_STATS ;
             } 
             #endif
 
-
+            BEGIN_STATS ("cpu", anz) ;
+            BEGIN_TRIALS (5) ;
             #ifndef GBCOMPACT
             if (info == GrB_NO_VALUE)
             {
@@ -617,6 +732,7 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
                         (GrB_BinaryOp) op, false, &opcode, &xcode, &ycode,
                         &zcode))
                     { 
+                        START_TIME_NAMED ("bind2nd, factory") ;
 
                         //------------------------------------------------------
                         // define the worker for the switch factory
@@ -640,6 +756,8 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
                         #define GB_NO_SECOND
                         #define GB_NO_PAIR
                         #include "binaryop/factory/GB_binop_factory.c"
+
+                        STOP_TIME ;
                     }
                 }
             }
@@ -651,39 +769,27 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
 
             if (info == GrB_NO_VALUE)
             { 
+                START_TIME_NAMED ("bind2nd, jit") ;
                 info = GB_apply_bind2nd_jit (Cx, ctype,
                     (GrB_BinaryOp) op, A, scalarx, A_nthreads) ;
+                STOP_TIME ;
             }
-        }
 
-        //----------------------------------------------------------------------
-        // via the generic kernel
-        //----------------------------------------------------------------------
+            //----------------------------------------------------------------------
+            // via the generic kernel
+            //----------------------------------------------------------------------
 
-        if (info == GrB_NO_VALUE)
-        {
+            if (info == GrB_NO_VALUE)
+            {
+                START_TIME_NAMED ("bind2nd, generic") ;
 
-            GB_BURBLE_N (anz, "(generic binop apply: %s) ", op->name) ;
+                GB_BURBLE_N (anz, "(generic binop apply: %s) ", op->name) ;
 
-            GB_Type_code acode = Atype->code ;
-            GxB_binary_function fop = op->binop_function ;
-            ASSERT (fop != NULL) ;
-            ASSERT (!A->iso) ;
+                GB_Type_code acode = Atype->code ;
+                GxB_binary_function fop = op->binop_function ;
+                ASSERT (fop != NULL) ;
+                ASSERT (!A->iso) ;
 
-            if (binop_bind1st)
-            { 
-                // Cx = binop (scalar,Ax) with bind1st
-                GB_cast_function cast_A_to_Y = GB_cast_factory (ycode, acode) ;
-                #define GB_APPLY_OP(pC,pA)                          \
-                    /* ywork = (ytype) Ax [pA] */                   \
-                    GB_void ywork [GB_VLA(ysize)] ;                 \
-                    cast_A_to_Y (ywork, Ax +(pA)*asize, asize) ;    \
-                    /* Cx [pC] = fop (scalarx, ywork) */            \
-                    fop (Cx +((pC)*zsize), scalarx, ywork) ;
-                #include "apply/template/GB_apply_unop_ip.c"
-            }
-            else
-            { 
                 // Cx = binop (Ax,scalar) with bind2nd
                 GB_cast_function cast_A_to_X = GB_cast_factory (xcode, acode) ;
                 #define GB_APPLY_OP(pC,pA)                          \
@@ -693,9 +799,16 @@ GrB_Info GB_apply_op        // apply a unary op, idxunop, or binop, Cx = op (A)
                     /* Cx [pC] = fop (xwork, scalarx) */            \
                     fop (Cx +((pC)*zsize), xwork, scalarx) ;
                 #include "apply/template/GB_apply_unop_ip.c"
+
+                info = GrB_SUCCESS ;
+
+                STOP_TIME ;
             }
-            info = GrB_SUCCESS ;
+
+            END_TRIALS ;
+            END_STATS ;
         }
+        CLOSE_STATS ;
 
     }
     else

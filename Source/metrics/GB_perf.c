@@ -18,8 +18,8 @@ const char *allow_timing [] = {
     "select_bitmap",
     "rowscale",
     "colscale",
-    "apply_bind1st",
-    "apply_bind2nd",
-    "apply_unop",
+    "apply_unop_positional",
+    // "apply_unop_nonpositional",
+    // "apply_binop",
     NULL
 } ;

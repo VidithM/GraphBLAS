@@ -108,6 +108,14 @@ GrB_Info GB_select_bitmap
             A->type, A->vlen, A->vdim, GB_ph_calloc, true,           \
             GxB_BITMAP, false, A->hyper_switch, -1, anz, true, C_iso,\
             false, false)) ;                                         \
+         if (C_iso)                                                  \
+         {                                                           \
+            GB_select_iso (C->x, opcode, athunk, A->x, asize) ;      \
+         }                                                           \
+         else                                                        \
+         {                                                           \
+            GB_memcpy (C->x, A->x, anz * asize, nthreads) ;          \
+         }                                                           \
         info = GrB_NO_VALUE ;                                        \
     }
     #define STATS_RESET TRIAL_FREE

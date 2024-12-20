@@ -214,8 +214,13 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
 
         info = GrB_NO_VALUE ;
         OPEN_STATS ("colscale", &tot_hits, &cuda_hits) ;
-        #define TRIAL_FREE
-        #define STATS_RESET
+        #define TRIAL_FREE                                          \
+        {                                                           \
+            GB_phybix_free (C) ;                                    \
+            GB_OK (GB_dup_worker (&C, C_iso, A, false, ztype)) ;    \
+            info = GrB_NO_VALUE ;                                   \
+        }
+        #define STATS_RESET TRIAL_FREE
 
         #if defined ( GRAPHBLAS_HAS_CUDA )
         if (GB_cuda_colscale_branch (A, D, semiring, flipxy))

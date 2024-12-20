@@ -54,21 +54,25 @@ extern struct timing_context timing_ctx ;
         GET (loc) = _loc ;                                           \
         _cuda_hits = _tot_hits = -1 ;                                \
         if (GET (cuda_hits) != NULL) {                               \
-            (*GET (cuda_hits))++ ;                                   \
+            if (!strcmp (GET (loc), "gpu")) {                        \
+                (*GET (cuda_hits))++ ;                               \
+            }                                                        \
             _cuda_hits = *GET (cuda_hits) ;                          \
         }                                                            \
         if (GET (tot_hits) != NULL) {                                \
-            (*GET (tot_hits))++ ;                                    \
+            if (!strcmp (GET (loc), "cpu")) {                        \
+                (*GET (tot_hits))++ ;                                \
+            }                                                        \
             _tot_hits = *GET (tot_hits) ;                            \
         }                                                            \
         char _timestamp [64] ;                                       \
         time_t _t = time (NULL) ;                                    \
         struct tm *_tm = localtime (&_t) ;                           \
         strftime (_timestamp, 64, "%c", _tm) ;                       \
-        if (_cuda_hits == 1) {                                       \
+        if (_tot_hits + _cuda_hits == 1) {                           \
             fprintf (GET (stats_file), "\n\nBatch at: %s\n\n"        \
                 "======== [Kernel: %s] "                             \
-                "[%s] [Start run: %d] "                              \
+                "[%s] [cuda_hits: %d] "                              \
                 "[tot_hits: %d (ratio: %0.3f)] [work: %ld] "         \
                 "========\n", _timestamp,                            \
                 GET (kern_name), GET (loc), _cuda_hits,              \
@@ -76,7 +80,7 @@ extern struct timing_context timing_ctx ;
                 _work) ;                                             \
         } else {                                                     \
             fprintf (GET (stats_file), "======== [Kernel: %s] "      \
-                "[%s] [Start run: %d] [tot_hits: %d] "               \
+                "[%s] [cuda_hits: %d] [tot_hits: %d] "               \
                 "(ratio: %0.3f) [work: %ld] ========\n",             \
                 GET (kern_name), GET (loc), _cuda_hits, _tot_hits,   \
                 ((double) _cuda_hits) / _tot_hits, _work) ;          \
