@@ -201,6 +201,7 @@ GrB_Info GB_selector
     {
         BEGIN_STATS ("gpu", A->nvals) ;
         BEGIN_TRIALS (5) ;
+        START_TIME ;
         // It is possible for non-sparse matrices to use the sparse kernel; see
         // the use_select_bitmap test above (the DIAG operator). The CUDA
         // select_sparse kernel will not work in this case, so make this go to
@@ -209,6 +210,7 @@ GrB_Info GB_selector
         // GB_cuda_select_branch.
         info = GB_cuda_select_sparse (C, C_iso, op, flipij, A, athunk, ythunk) ;
 
+        STOP_TIME ;
         END_TRIALS ;
         END_STATS ;
     }
@@ -227,6 +229,7 @@ GrB_Info GB_selector
         END_TRIALS ;
         END_STATS ;
     }
+
     CLOSE_STATS ;
 
     GB_OK (info) ;  // check for out-of-memory or other failures

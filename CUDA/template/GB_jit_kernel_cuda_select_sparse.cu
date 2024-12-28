@@ -47,6 +47,11 @@ __global__ void GB_cuda_select_sparse_phase1
     const GB_Y_TYPE y = * ((GB_Y_TYPE *) ythunk) ;
     #endif
     GB_A_NHELD (anz) ;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x ;
+    if (tid == 0) {
+        // shift by one, to define Keep [-1] as 0
+        Keep [-1] = 0 ;
+    }
 
     #if ( GB_DEPENDS_ON_J )
         const int64_t anvec = A->nvec ;
@@ -78,7 +83,6 @@ __global__ void GB_cuda_select_sparse_phase1
             }
         }
     #else
-        int tid = blockIdx.x * blockDim.x + threadIdx.x ;
         int nthreads = blockDim.x * gridDim.x ;
 
         for (int64_t pA = tid; pA < anz; pA += nthreads)
@@ -115,6 +119,13 @@ __global__ void GB_cuda_select_sparse_phase2
     GB_A_NHELD (anz) ;
 
     const int64_t anvec = A->nvec ;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x ;
+
+    if (tid == 0)
+    {
+        // shift by one: to define Ak_keep [-1] as -1
+        Ak_keep [0] = -1 ;
+    }
 
     for (int64_t pfirst = blockIdx.x << log2_chunk_size ;
                  pfirst < anz ;
@@ -169,6 +180,12 @@ __global__ void GB_cuda_select_sparse_phase3
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x ;
     int nthreads = blockDim.x * gridDim.x ;
+
+    if (tid == 0)
+    {
+        // shift by one: to define Ck_delta [-1] as 0
+        Ck_delta [0] = 0 ;
+    }
 
     for (int64_t pA = tid; pA < anz; pA += nthreads)
     {
@@ -261,8 +278,6 @@ GB_JIT_CUDA_KERNEL_SELECT_SPARSE_PROTO (GB_jit_kernel)
         return (GrB_OUT_OF_MEMORY) ;
     }
 
-    // shift by one, to define Keep [-1] as 0
-    W [0] = 0;      // placeholder for easier end-condition
     Keep = W + 1 ;  // Keep has size A->nvals and starts at W [1]
 
     GB_cuda_select_sparse_phase1 <<<grid, block, 0, stream>>>
@@ -302,12 +317,7 @@ GB_JIT_CUDA_KERNEL_SELECT_SPARSE_PROTO (GB_jit_kernel)
         return (GrB_OUT_OF_MEMORY) ;
     }
 
-    // shift by one: to define Ck_delta [-1] as 0
-    W_2 [0] = 0 ;
     Ck_delta = W_2 + 1 ;
-
-    // shift by one: to define Ak_keep [-1] as -1
-    W_3 [0] = -1 ;
     Ak_keep = W_3 + 1 ;
 
     //--------------------------------------------------------------------------
@@ -366,7 +376,7 @@ GB_JIT_CUDA_KERNEL_SELECT_SPARSE_PROTO (GB_jit_kernel)
     int64_t *Cp = (int64_t *) C->p ;
 
     //--------------------------------------------------------------------------
-    // Phase 3: Build Cp and Ch
+    // Phase 4: Build Cp and Ch
     //--------------------------------------------------------------------------
     GB_cuda_select_sparse_phase4 <<<grid, block, 0, stream>>>
         (A, cnz, Ak_keep, Ck_map, Cp, (int64_t *) C->h) ;

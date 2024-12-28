@@ -14,11 +14,11 @@ struct timing_context timing_ctx = {
 } ;
 
 const char *allow_timing [] = {
-    "select_sparse",
-    "select_bitmap",
-    "rowscale",
-    "colscale",
-    "apply_unop_positional",
+    // "select_sparse",
+    // "select_bitmap",
+    // "rowscale",
+    // "colscale",
+    // "apply_unop_positional",
     // "apply_unop_nonpositional",
     // "apply_binop",
     NULL

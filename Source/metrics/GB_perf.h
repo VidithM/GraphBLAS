@@ -140,14 +140,18 @@ extern struct timing_context timing_ctx ;
 // Use omp_get_wtime()
 #define START_TIME                          \
 {                                           \
-    GET (subtrial_name) = "N/A" ;           \
-    GET (t_start) = omp_get_wtime () ;      \
+    if (GET (do_timing)) {                  \
+        GET (subtrial_name) = "N/A" ;       \
+        GET (t_start) = omp_get_wtime () ;  \
+    }                                       \
 }
 
 #define START_TIME_NAMED(name)              \
 {                                           \
-    GET (subtrial_name) = name ;            \
-    GET (t_start) = omp_get_wtime () ;      \
+    if (GET (do_timing)) {                  \
+        GET (subtrial_name) = name ;        \
+        GET (t_start) = omp_get_wtime () ;  \
+    }                                       \
 }
 
 #define STOP_TIME                                                    \
@@ -169,16 +173,20 @@ extern struct timing_context timing_ctx ;
 // C++ chrono::system_clock
 #define START_TIME                                                   \
 {                                                                    \
-    GET (subtrial_name) = "N/A" ;                                    \
-    auto _t_start = std::chrono::system_clock::now () ;              \
-    GET (t_start) = _t_start.time_since_epoch().count () ;           \
+    if (GET (do_timing)) {                                           \
+        GET (subtrial_name) = "N/A" ;                                \
+        auto _t_start = std::chrono::system_clock::now () ;          \
+        GET (t_start) = _t_start.time_since_epoch().count () ;       \
+    }                                                                \
 }
 
 #define START_TIME_NAMED(name)                                       \
 {                                                                    \
-    GET (subtrial_name) = name ;                                     \
-    auto _t_start = std::chrono::system_clock::now () ;              \
-    GET (t_start) = _t_start.time_since_epoch().count () ;           \
+    if (GET (do_timing)) {                                           \
+        GET (subtrial_name) = name ;                                 \
+        auto _t_start = std::chrono::system_clock::now () ;          \
+        GET (t_start) = _t_start.time_since_epoch().count () ;       \
+    }                                                                \
 }
 
 #define STOP_TIME                                                    \

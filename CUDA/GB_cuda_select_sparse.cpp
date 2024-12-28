@@ -23,7 +23,6 @@ GrB_Info GB_cuda_select_sparse
     const GB_void *ythunk
 )
 {
-    START_TIME ;
     // check inputs
     ASSERT (C != NULL && !(C->static_header)) ;
     ASSERT (A != NULL && !(A->static_header)) ;
@@ -42,7 +41,6 @@ GrB_Info GB_cuda_select_sparse
     gridsz = std::max (gridsz, 1) ;
 
     // Initialize C to be a user-returnable hypersparse empty matrix.
-    // If needed, we handle the hyper->sparse conversion below.
     GB_OK (GB_new (&C, A->type, A->vlen, A->vdim, GB_ph_calloc, A->is_csc,
             GxB_HYPERSPARSE, A->hyper_switch, /* C->plen: */ 1,
             /* FIXME: */ false, false)) ;
@@ -59,8 +57,6 @@ GrB_Info GB_cuda_select_sparse
     ASSERT (C->x != NULL) ;
 
     GB_OK (info) ;
-
-    STOP_TIME ;
 
     if (C_iso)
     {

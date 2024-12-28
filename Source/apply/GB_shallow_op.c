@@ -182,6 +182,8 @@ GrB_Info GB_shallow_op      // create shallow matrix and apply operator
     //--------------------------------------------------------------------------
 
     // allocate new space for the numerical values of C; use calloc if bitmap
+    // FIXME: This is not CUDA-friendly (C->x will always start on the CPU).
+    // Make this step method-dependent
     C->x = GB_XALLOC (GB_IS_BITMAP (C), C_iso, anz,
         C->type->size, &(C->x_size)) ;
     C->x_shallow = false ;          // free C->x when freeing C

@@ -12,9 +12,9 @@
 
 #include <cub/cub.cuh>
 
-#define GB_FREE_ALL             \
-{                               \
-    cudaFree (d_temp_storage) ; \
+#define GB_FREE_ALL                             \
+{                                               \
+    cudaFreeAsync (d_temp_storage, stream) ;    \
 }
 
 typedef enum GB_cuda_cumsum_type
@@ -23,7 +23,7 @@ typedef enum GB_cuda_cumsum_type
     GB_CUDA_CUMSUM_INCLUSIVE
 } GB_cuda_cumsum_type ;
 
-__host__ GrB_Info GB_cuda_cumsum             // compute the cumulative sum of an array
+__host__ GrB_Info GB_cuda_cumsum // compute the cumsum of an array
 (
     int64_t *__restrict__ out,   // size n or n+1, output.
     int64_t *__restrict__ in,    // size n or n+1, input
@@ -43,30 +43,38 @@ __host__ GrB_Info GB_cuda_cumsum             // compute the cumulative sum of an
     ASSERT (out != NULL) ;
     ASSERT (n >= 0) ;
 
-    void *d_temp_storage = NULL;
+    void *d_temp_storage = NULL ;
     size_t temp_storage_bytes = 0 ;
 
     switch (type)
     {
         case GB_CUDA_CUMSUM_INCLUSIVE:
-            cub::DeviceScan::InclusiveSum (d_temp_storage, temp_storage_bytes, in, out, n, stream) ;
+            cub::DeviceScan::InclusiveSum (d_temp_storage,
+                temp_storage_bytes, in, out, n, stream) ;
             break;
         default:
-            cub::DeviceScan::ExclusiveSum (d_temp_storage, temp_storage_bytes, in, out, n, stream) ;
+            cub::DeviceScan::ExclusiveSum (d_temp_storage,
+                temp_storage_bytes, in, out, n, stream) ;
     }
 
-    CUDA_OK (cudaMalloc (&d_temp_storage, temp_storage_bytes)) ;
+    CUDA_OK (cudaMallocAsync (&d_temp_storage,
+        temp_storage_bytes, stream)) ;
+    CUDA_OK (cudaStreamSynchronize (stream)) ;
 
     // Run
     switch (type)
     {
         case GB_CUDA_CUMSUM_INCLUSIVE:
-            cub::DeviceScan::InclusiveSum (d_temp_storage, temp_storage_bytes, in, out, n, stream) ;
+            cub::DeviceScan::InclusiveSum (d_temp_storage,  
+                temp_storage_bytes, in, out, n, stream) ;
             break;
         default:
-            cub::DeviceScan::ExclusiveSum (d_temp_storage, temp_storage_bytes, in, out, n, stream) ;
+            cub::DeviceScan::ExclusiveSum (d_temp_storage,
+                temp_storage_bytes, in, out, n, stream) ;
     }
-    cudaFree (d_temp_storage) ;
+
+    cudaFreeAsync (d_temp_storage, stream) ;
+    cudaStreamSynchronize (stream) ;
     
     return GrB_SUCCESS;
 }
