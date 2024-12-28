@@ -124,7 +124,7 @@ __global__ void GB_cuda_select_sparse_phase2
     if (tid == 0)
     {
         // shift by one: to define Ak_keep [-1] as -1
-        Ak_keep [0] = -1 ;
+        Ak_keep [-1] = -1 ;
     }
 
     for (int64_t pfirst = blockIdx.x << log2_chunk_size ;
@@ -184,7 +184,7 @@ __global__ void GB_cuda_select_sparse_phase3
     if (tid == 0)
     {
         // shift by one: to define Ck_delta [-1] as 0
-        Ck_delta [0] = 0 ;
+        Ck_delta [-1] = 0 ;
     }
 
     for (int64_t pA = tid; pA < anz; pA += nthreads)
