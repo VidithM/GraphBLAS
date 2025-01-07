@@ -101,7 +101,14 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
     //--------------------------------------------------------------------------
 
     // allocate C->x but do not initialize it
+    int64_t *tmp_Ap = A->p ;
+    int64_t *tmp_Ah = A->h ;
+    A->p = NULL ;
+    A->h = NULL ;
     GB_OK (GB_dup_worker (&C, C_iso, A, false, ztype)) ;
+    A->p = tmp_Ap ;
+    A->h = tmp_Ah ;
+
     info = GrB_NO_VALUE ;
     ASSERT (C->type == ztype) ;
 
@@ -216,8 +223,6 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
         OPEN_STATS ("colscale", &tot_hits, &cuda_hits) ;
         #define TRIAL_FREE                                          \
         {                                                           \
-            GB_phybix_free (C) ;                                    \
-            GB_OK (GB_dup_worker (&C, C_iso, A, false, ztype)) ;    \
             info = GrB_NO_VALUE ;                                   \
         }
         #define STATS_RESET TRIAL_FREE
@@ -234,6 +239,26 @@ GrB_Info GB_colscale                // C = A*D, column scale with diagonal D
             END_STATS ;
         }
         #endif
+
+        if (info == GrB_NO_VALUE)
+        {
+            // copy A->p, A->h into C->p, C->h
+            size_t psize = A->p_is_32 ?
+                sizeof (uint32_t) : sizeof (uint64_t) ;
+            size_t isize = A->i_is_32 ?
+                sizeof (uint32_t) : sizeof (uint64_t) ;
+            int64_t anvec = A->nvec ;
+            int nthreads_max = GB_Context_nthreads_max ( ) ;
+
+            if (A->p != NULL)
+            { 
+                GB_memcpy (C->p, A->p, (anvec+1) * psize, nthreads_max) ;
+            }
+            if (A->h != NULL)
+            { 
+                GB_memcpy (C->h, A->h, anvec * isize, nthreads_max) ;
+            }
+        }
 
         BEGIN_STATS ("cpu", A->nvals) ;
         #undef TRIAL_FREE

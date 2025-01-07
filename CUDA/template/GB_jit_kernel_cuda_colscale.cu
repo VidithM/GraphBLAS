@@ -19,8 +19,10 @@ __global__ void GB_cuda_colscale_kernel
     GB_C_TYPE *__restrict__ Cx = (GB_C_TYPE *) C->x ;
 
     #if ( GB_A_IS_SPARSE || GB_A_IS_HYPER )
+    int64_t *__restrict__ Cp = (int64_t *) C->p ;
     const int64_t *__restrict__ Ap = (int64_t *) A->p ;
         #if ( GB_A_IS_HYPER )
+        int64_t *__restrict__ Ch = (int64_t *) C->h ;
         const int64_t *__restrict__ Ah = (int64_t *) A->h ;
         #endif
     #endif
@@ -31,12 +33,13 @@ __global__ void GB_cuda_colscale_kernel
 
     GB_A_NHELD (anz) ;
 
+    int nthreads = blockDim.x * gridDim.x ;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x ;
+
     #if (GB_A_IS_BITMAP || GB_A_IS_FULL)
         const int64_t avlen = A->vlen ;
         // bitmap/full case
-        int nthreads_in_entire_grid = blockDim.x * gridDim.x ;
-        int tid = blockIdx.x * blockDim.x + threadIdx.x ;
-        for (int64_t p = tid ; p < anz ; p += nthreads_in_entire_grid)
+        for (int64_t p = tid ; p < anz ; p += nthreads)
         {
             if (!GBB_A (Ab, p)) continue ;
             // the pth entry in A is A(i,j) where i = p%avlen and j = p/avlen
@@ -52,6 +55,18 @@ __global__ void GB_cuda_colscale_kernel
 
     #else
         const int64_t anvec = A->nvec ;
+        // Copy A->p, A->h to C->p, C->h here instead of using
+        // GB_dup_worker on the CPU, so A->p, A->h stay on the GPU
+        // if they were already there
+        for (int kA = tid ; kA < anvec ; kA += nthreads)
+        {
+            C->p [kA] = A->p [kA] ;
+            #if ( GB_A_IS_HYPER )
+            C->h [kA] = A->h [kA] ;
+            #endif
+        }
+        C->p [anvec] = A->p [anvec] ;
+
         // sparse/hypersparse case (cuda_ek_slice only works for sparse/hypersparse)
         for (int64_t pfirst = blockIdx.x << log2_chunk_size ;
                     pfirst < anz ;

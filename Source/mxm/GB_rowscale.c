@@ -89,7 +89,12 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
     //--------------------------------------------------------------------------
 
     // allocate C->x but do not initialize it
+    // TODO: This is not CUDA-friendly as the contents of B are moved
+    // back to the CPU. Make this method-dependent.
+    int64_t *tmp_Bi = B->i ;
+    B->i = NULL ;
     GB_OK (GB_dup_worker (&C, C_iso, B, false, ztype)) ;
+    B->i = tmp_Bi ;
     info = GrB_NO_VALUE ;
     ASSERT (C->type == ztype) ;
 
@@ -206,8 +211,6 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
         OPEN_STATS ("rowscale", &tot_hits, &cuda_hits) ;
         #define TRIAL_FREE                                          \
         {                                                           \
-            GB_phybix_free (C) ;                                    \
-            GB_OK (GB_dup_worker (&C, C_iso, B, false, ztype)) ;    \
             info = GrB_NO_VALUE ;                                   \
         }
         #define STATS_RESET TRIAL_FREE
@@ -224,6 +227,18 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
             END_STATS ;
         }
         #endif
+
+        if (info == GrB_NO_VALUE)
+        {
+            // Copy in B->b
+            int64_t bnz = GB_nnz_held (B) ;
+            int nthreads_max = GB_Context_nthreads_max ( ) ;
+
+            if (B->b != NULL)
+            { 
+                GB_memcpy (C->b, B->b, bnz * sizeof (int8_t), nthreads_max) ;
+            }
+        }
 
         BEGIN_STATS ("cpu", B->nvals) ;
         BEGIN_TRIALS (5) ;
