@@ -1,7 +1,7 @@
 #ifndef GB_PERF_H
 #define GB_PERF_H
 
-#define RESULTS_LOCAL
+// #define RESULTS_LOCAL
 
 #ifdef RESULTS_LOCAL
     #define RESULTS_DIR "/home/vidith/Desktop/cuda-results"

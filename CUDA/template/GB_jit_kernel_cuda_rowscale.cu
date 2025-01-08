@@ -16,6 +16,7 @@ __global__ void GB_cuda_rowscale_kernel
     #define B_iso GB_B_ISO
 
     #if ( GB_B_IS_SPARSE || GB_B_IS_HYPER )
+    int64_t *__restrict__ Ci = (int64_t *) C->i ;
     const int64_t *__restrict__ Bi = (int64_t *) B->i ;
     #endif
 
@@ -39,7 +40,7 @@ __global__ void GB_cuda_rowscale_kernel
         int64_t i = GBI_B (Bi, p, bvlen) ;      // get row index of B(i,j)
         #if ( GB_B_IS_SPARSE || GB_B_IS_HYPER )
         // Copy B->i to C->i here instead of using GB_dup_worker
-        C->i [p] = B->i [p] ;
+        Ci [p] = Bi [p] ;
         #endif
         GB_DECLAREA (dii) ;
         GB_GETA (dii, Dx, i, D_iso) ;           // dii = D(i,i)

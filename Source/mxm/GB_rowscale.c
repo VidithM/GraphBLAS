@@ -84,19 +84,7 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
     GB_void cscalar [GB_VLA(zsize)] ;
     bool C_iso = GB_AxB_iso (cscalar, D, B, D->vdim, semiring, flipxy, true) ;
 
-    //--------------------------------------------------------------------------
-    // copy the pattern of B into C
-    //--------------------------------------------------------------------------
-
-    // allocate C->x but do not initialize it
-    // TODO: This is not CUDA-friendly as the contents of B are moved
-    // back to the CPU. Make this method-dependent.
-    int64_t *tmp_Bi = B->i ;
-    B->i = NULL ;
-    GB_OK (GB_dup_worker (&C, C_iso, B, false, ztype)) ;
-    B->i = tmp_Bi ;
     info = GrB_NO_VALUE ;
-    ASSERT (C->type == ztype) ;
 
     //--------------------------------------------------------------------------
     // C = D*B, row scale, compute numerical values
@@ -104,6 +92,8 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
 
     if (GB_IS_BUILTIN_BINOP_CODE_POSITIONAL (opcode))
     {
+        GB_OK (GB_dup_worker (&C, C_iso, B, false, ztype)) ;
+        ASSERT (C->type == ztype) ;
 
         //----------------------------------------------------------------------
         // apply a positional operator: convert C=D*B to C=op(B)
@@ -155,6 +145,8 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
     }
     else if (C_iso)
     { 
+        GB_OK (GB_dup_worker (&C, C_iso, B, false, ztype)) ;
+        ASSERT (C->type == ztype) ;
 
         //----------------------------------------------------------------------
         // via the iso kernel
@@ -176,6 +168,13 @@ GrB_Info GB_rowscale                // C = D*B, row scale with diagonal D
         //----------------------------------------------------------------------
         // determine if the values are accessed
         //----------------------------------------------------------------------
+
+        int64_t *tmp_Bi = B->i ;
+        B->i = NULL ;
+        GB_OK (GB_dup_worker (&C, C_iso, B, false, ztype)) ;
+        B->i = tmp_Bi ;
+        ASSERT (C->type == ztype) ;
+
 
         ASSERT (fmult != NULL) ;
         bool op_is_first  = (opcode == GB_FIRST_binop_code) ;

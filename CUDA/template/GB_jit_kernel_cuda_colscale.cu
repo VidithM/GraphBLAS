@@ -60,12 +60,12 @@ __global__ void GB_cuda_colscale_kernel
         // if they were already there
         for (int kA = tid ; kA < anvec ; kA += nthreads)
         {
-            C->p [kA] = A->p [kA] ;
+            Cp [kA] = Ap [kA] ;
             #if ( GB_A_IS_HYPER )
-            C->h [kA] = A->h [kA] ;
+            Ch [kA] = Ah [kA] ;
             #endif
         }
-        C->p [anvec] = A->p [anvec] ;
+        Cp [anvec] = Ap [anvec] ;
 
         // sparse/hypersparse case (cuda_ek_slice only works for sparse/hypersparse)
         for (int64_t pfirst = blockIdx.x << log2_chunk_size ;
